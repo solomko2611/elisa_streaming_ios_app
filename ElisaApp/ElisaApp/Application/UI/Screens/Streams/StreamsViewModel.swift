@@ -58,6 +58,7 @@ final class StreamsViewModelImpl {
                 cameraGranted: permissionManager.capturePermissionStatus == .notDetermined ? nil : permissionManager.capturePermissionStatus == .authorized,
                 micGranted: permissionManager.recordPermissionStatus,
                 localStreamView: streamsProvider.localStreamView,
+				localStreamLayer: streamsProvider.localStreamLayer,
                 streamState: streamsProvider.streamState,
                 isLoading: streamsProvider.isLoading,
                 overlayUrl: streamsProvider.overlayURL,

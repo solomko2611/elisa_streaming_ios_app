@@ -6,13 +6,14 @@
 //
 
 import UIKit
-import HaishinKit
+import AVFoundation
 
 struct StreamsInput {
     let campaign: Campaign?
     let cameraGranted: Bool?
     let micGranted: Bool?
     let localStreamView: UIView?
+	let localStreamLayer: AVCaptureVideoPreviewLayer?
     let streamState: StreamsProviderState.StreamState
     var isLoading: Bool = false
     var overlayUrl: URL?

@@ -8,8 +8,8 @@
 import UIKit
 import RxSwift
 import RxCocoa
-import HaishinKit
 import WebKit
+import AVFoundation
 
 final class StreamsView: UIView {
     
@@ -179,6 +179,7 @@ final class StreamsView: UIView {
     
     private lazy var localStreamContainer = UIView()
     private var localStreamView: UIView?
+	private var localStreamLayer: AVCaptureVideoPreviewLayer?
     private var callStartDate: Date?
     private var callTimeTimer: Timer?
     private var hideControlsTimer: Timer?
@@ -462,7 +463,18 @@ final class StreamsView: UIView {
             localStreamView = nil
         }
         
-        localStreamContainer.isHidden = localStreamView == nil || input.cameraGranted != true
+		if let localStreamLayer = input.localStreamLayer {
+			if self.localStreamLayer !== localStreamLayer {
+				self.localStreamLayer = localStreamLayer
+				localStreamContainer.layer.addSublayer(localStreamLayer)
+				localStreamLayer.frame = localStreamContainer.bounds
+			}
+		} else {
+			localStreamLayer?.removeFromSuperlayer()
+			localStreamLayer = nil
+		}
+		
+		localStreamContainer.isHidden = (localStreamView == nil && localStreamLayer == nil) || input.cameraGranted != true
         
         if input.shouldReloadOverlay,
            let url = input.overlayUrl {

@@ -7,7 +7,6 @@
 
 import RxSwift
 import Foundation
-import HaishinKit
 import AVFoundation
 import VideoToolbox
 import UIKit
@@ -16,7 +15,7 @@ import ReplayKit
 protocol RTMPStreamManager {
     var events: PublishSubject<RTMPStreamManagerImpl.RTMPStreamManagerEvents> { get }
     var cameraManager: RTMPCameraManager { get }
-    func captureDevices(isBackCamera: Bool, disableAdaptiveBitrate: Bool, resolution: String, aVCaptureVideoStabilizationMode: Int)
+    func captureDevices(isBackCamera: Bool, disableAdaptiveBitrate: Bool, resolution: String, aVCaptureVideoStabilizationMode: Int, codec: String)
     func rotateCamera()
     func rotateScreen()
     func publish(rtmpUrl: String, rtmpKey: String)
@@ -44,6 +43,7 @@ final class RTMPStreamManagerImpl {
     
     enum RTMPStreamManagerEvents {
         case didUpdateLocalStream(localStreamView: MTHKView?)
+		case didUpdateLocalStreamLayer(localStreamLayer: AVCaptureVideoPreviewLayer)
         case didChangeConnection(state: RTMPConnection.Code)
         case didUserCloseConnection
         case maxReconnectTryReached
@@ -95,17 +95,24 @@ final class RTMPStreamManagerImpl {
     var resolution = ""
     // 'Standard' stabilization mode by default
     var aVCaptureVideoStabilizationMode = 1
+    var codec = "h264"
     private var streamResolutionConfig: RTMPStreamManagerImpl.RTMPStreamingConfig = .portrait {
         didSet {
             guard let device: AVCaptureDevice = cameraManager.state.value.device else {
                 return
             }
+            if(self.codec == "h264") {
+                optimalBitrate = 1024 * 1024 * 3
+            } else {
+                optimalBitrate = 1024 * 1024 * 2
+            }
             
             if(self.resolution == "1080p"){
-                optimalBitrate = 1024 * 1024 * 6
-            } else{
-            optimalBitrate = 1024 * 1024 * 3
+                optimalBitrate *= 2
+                
+                
             }
+          
             let mode = AVCaptureVideoStabilizationMode(rawValue: self.aVCaptureVideoStabilizationMode) ?? AVCaptureVideoStabilizationMode.standard
             
             if device.supportsSessionPreset(AVCaptureSession.Preset.hd1920x1080) && self.resolution == "1080p"{
@@ -125,13 +132,32 @@ final class RTMPStreamManagerImpl {
                     }
                 }
                 
-                rtmpStream?.videoSettings = [
-                    .width: streamResolutionConfig.hightResolution.width, // video output width
-                    .height: streamResolutionConfig.hightResolution.height, // video output height
-                    .bitrate: optimalBitrate, // video output bitrate
-                    .profileLevel: kVTProfileLevel_H264_Baseline_4_0,
-                    .maxKeyFrameIntervalDuration: 2,
-                ]
+//                rtmpStream?.captureSettings = [
+//                    .fps: maxFPS, // FPS
+//                    .sessionPreset: AVCaptureSession.Preset.hd1920x1080, // input video width/height
+//                    .continuousAutofocus: false,
+//                    .continuousExposure: true,
+//                    .preferredVideoStabilizationMode: AVCaptureVideoStabilizationMode.standard,
+//                ]
+                
+//                rtmpStream?.videoSettings = [
+//                    .width: streamResolutionConfig.hightResolution.width, // video output width
+//                    .height: streamResolutionConfig.hightResolution.height, // video output height
+//
+//                    .profileLevel: kVTProfileLevel_H264_Baseline_4_0,
+//
+//                ]
+                let profileLevel = self.codec == "h264" ? kVTProfileLevel_H264_Baseline_4_0 : kVTProfileLevel_HEVC_Main_AutoLevel
+                rtmpStream?.videoSettings = VideoCodecSettings(
+                  videoSize: .init(width: Int(streamResolutionConfig.hightResolution.width), height:                Int(streamResolutionConfig.hightResolution.height)),
+                  profileLevel: profileLevel as String,
+                  bitRate: optimalBitrate,
+                  maxKeyFrameIntervalDuration: 2,
+                  scalingMode: .trim,
+                  bitRateMode: .average,
+                  allowFrameReordering: nil,
+                  isHardwareEncoderEnabled: true
+                )
                 
             } else {
                 rtmpStream?.frameRate = Float64(maxFPS)
@@ -150,20 +176,40 @@ final class RTMPStreamManagerImpl {
                     }
                 }
                 
-                rtmpStream?.videoSettings = [
-                    .width: streamResolutionConfig.mediumResolution.width, // video output width
-                    .height: streamResolutionConfig.mediumResolution.height, // video output height
-                    .bitrate: optimalBitrate,//1.5 * 1024 * 1024, // video output bitrate
-                    .profileLevel: kVTProfileLevel_H264_Baseline_3_1,
-                    .maxKeyFrameIntervalDuration: 2 // key frame / sec
-                ]
+//                rtmpStream?.captureSettings = [
+//                    .fps: maxFPS, // FPS
+//                    .sessionPreset: AVCaptureSession.Preset.hd1280x720, // input video width/height
+//                    .continuousAutofocus: false,
+//                    .continuousExposure: true,
+//                    .preferredVideoStabilizationMode: AVCaptureVideoStabilizationMode.standard,
+//                ]
+                
+//                rtmpStream?.videoSettings = [
+//                    .width: streamResolutionConfig.mediumResolution.width, // video output width
+//                    .height: streamResolutionConfig.mediumResolution.height, // video output height
+//                    .bitrate: optimalBitrate,//1.5 * 1024 * 1024, // video output bitrate
+//                    .profileLevel: kVTProfileLevel_H264_Baseline_3_1,
+//                    .maxKeyFrameIntervalDuration: 2 // key frame / sec
+//                ]
+                let profileLevel = self.codec == "h264" ? kVTProfileLevel_H264_Baseline_3_1 :kVTProfileLevel_HEVC_Main_AutoLevel
+                
+                rtmpStream?.videoSettings = VideoCodecSettings(
+                  videoSize: .init(width: Int(streamResolutionConfig.mediumResolution.width), height:                Int(streamResolutionConfig.mediumResolution.height)),
+                  profileLevel: profileLevel as String,
+                  bitRate: optimalBitrate,
+                  maxKeyFrameIntervalDuration: 2,
+                  scalingMode: .trim,
+                  bitRateMode: .average,
+                  allowFrameReordering: nil,
+                  isHardwareEncoderEnabled: true
+                )
             }
             
             switch streamResolutionConfig {
             case .portrait:
-                rtmpStream?.videoSettings[.scalingMode] = ScalingMode.letterbox
+                rtmpStream?.videoSettings.scalingMode = VideoCodecSettings.ScalingMode.letterbox
             case .landscape:
-                rtmpStream?.videoSettings[.scalingMode] = nil
+                rtmpStream?.videoSettings.scalingMode = VideoCodecSettings.ScalingMode.trim
             }
         }
     }
@@ -229,6 +275,8 @@ final class RTMPStreamManagerImpl {
             invalidateTimer()
             streamIsPublished = true
             logService.logMessage(topic: .streamState(.publishStart))
+            logService.logMessage(topic: .bitrate(bitrateForLog(self.optimalBitrate)))
+            print("Starting stream")
         default:
             break
         }
@@ -320,18 +368,19 @@ extension RTMPStreamManagerImpl: RTMPStreamManager {
         logService.logMessage(topic: .userAction(.switchCamera( position == .back ? .back : .front)))
     }
     
-    func captureDevices(isBackCamera: Bool, disableAdaptiveBitrate: Bool, resolution : String, aVCaptureVideoStabilizationMode: Int) {
+    func captureDevices(isBackCamera: Bool, disableAdaptiveBitrate: Bool, resolution : String, aVCaptureVideoStabilizationMode: Int, codec: String) {
         guard let device: AVCaptureDevice = cameraManager.state.value.device else {
             return
         }
         NSLog("\naVCaptureVideoStabilizationMode : %@", String(aVCaptureVideoStabilizationMode))
         self.resolution = resolution
+        self.codec = codec
         self.aVCaptureVideoStabilizationMode = aVCaptureVideoStabilizationMode
         streamsClosedByUser = false
         
         rtmpStream = RTMPStream(connection: rtmpConnection)
         if !disableAdaptiveBitrate {
-            rtmpStream?.delegate = self
+            //rtmpStream?.delegate = self
         }
         rotateScreen()
         
@@ -345,26 +394,40 @@ extension RTMPStreamManagerImpl: RTMPStreamManager {
         }
         
         
-        rtmpStream?.audioSettings = [
+        rtmpStream?.audioSettings = AudioCodecSettings(
 //            .muted: false,
-            .bitrate: 32 * 1024,
-            .sampleRate: 44_100,
-        ]
+            bitRate: 32 * 1024
+            
+            //format: .aac
+        )
         
         
         rtmpStream?.attachAudio(AVCaptureDevice.default(for: .audio)) { error in
             NSLog("\nWarn : %@", error.localizedDescription)
         }
-        rtmpStream?.attachCamera(device) { error in
-            NSLog("\nWarn : %@", error.localizedDescription)
-        }
+		rtmpStream?.attachCamera(device) { error in
+			NSLog("\nWarn : %@", error.localizedDescription)
+		} onCompletion: { [weak self] previewLayer in
+			if let previewLayer {
+				DispatchQueue.main.async {
+					self?.attachPreviewLayer(previewLayer, mirrored: !isBackCamera)
+				}
+			}
+		}
 
         lfView.videoGravity = .resizeAspect
         lfView.isMirrored = !isBackCamera
         lfView.attachStream(rtmpStream)
-        events.onNext(.didUpdateLocalStream(localStreamView: lfView))
+//        events.onNext(.didUpdateLocalStream(localStreamView: lfView))
         
     }
+	
+	func attachPreviewLayer(_ previewLayer: AVCaptureVideoPreviewLayer, mirrored: Bool) {
+		previewLayer.videoGravity = .resizeAspect
+//		previewLayer.connection?.isVideoMirrored = mirrored
+		
+		events.onNext(.didUpdateLocalStreamLayer(localStreamLayer: previewLayer)) //UPDATED AV RENDERING
+	}
     
     func publish(rtmpUrl: String, rtmpKey: String) {
         rtmpConnection.removeEventListener(.rtmpStatus, selector: #selector(rtmpStatusHandler), observer: self)
@@ -398,7 +461,7 @@ extension RTMPStreamManagerImpl: RTMPStreamManager {
 extension RTMPStreamManagerImpl {
     internal func adjustBitrate (decrease: Bool, stream: RTMPStream) {
         guard !bitrateCooldown else { return }
-        let currentBitrate = rtmpStream?.videoSettings[.bitrate] as! UInt32
+        let currentBitrate = rtmpStream?.videoSettings.bitRate as! UInt32
         
         NSLog("\nCurrentBitrate: %d%@%@%@%@%@", currentBitrate,
               "\nBitrateCooldown \(bitrateCooldown.description)",
@@ -455,7 +518,7 @@ extension RTMPStreamManagerImpl {
             }
         }
         logService.logMessage(topic: .bitrate(bitrateForLog(newBitrate)))
-        rtmpStream?.videoSettings[.bitrate] = newBitrate
+        rtmpStream?.videoSettings.bitRate = newBitrate
         
         NSLog("\nHaishin newBitrate: %ld", newBitrate)
         NSLog("\nHaishin Bitrate Decrease: %@ newLevel: %@", decrease.description, currentBitrateLevel.rawValue)

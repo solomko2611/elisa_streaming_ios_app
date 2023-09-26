@@ -8,7 +8,6 @@
 import Foundation
 import RxRelay
 import AVFoundation
-import HaishinKit
 
 protocol RTMPCameraManager: AnyObject {
     func changeExposure(value: Double) throws

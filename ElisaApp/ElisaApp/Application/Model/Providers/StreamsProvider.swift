@@ -11,7 +11,6 @@ import RxRelay
 import SwiftLazy
 import UIKit
 import AVFoundation
-import HaishinKit
 import SocketIO
 
 enum MicState {
@@ -52,6 +51,7 @@ struct StreamsProviderState: UpdatableStruct {
     
     var campaign: Campaign?
     var localStreamView: UIView?
+	var localStreamLayer: AVCaptureVideoPreviewLayer?
     var streamState: StreamState = .initiated
     var page: Page?
     var rtmpUrl: String?
@@ -94,6 +94,7 @@ final class StreamsProviderImpl {
     private var overlayBaseUrl: String = ""
     var resolution = ""
     var aVCaptureVideoStabilizationMode = 1
+    var codec = "h264"
     // MARK: - Init
     
     init(streamManager: RTMPStreamManager,
@@ -119,6 +120,8 @@ final class StreamsProviderImpl {
             switch event {
             case .didUpdateLocalStream(let view):
                 self?.state.update(\.localStreamView, to: view)
+			case .didUpdateLocalStreamLayer(let layer):
+				self?.state.update(\.localStreamLayer, to: layer)
             case .didChangeConnection(let state):
                 switch state {
                 case .connectClosed:
@@ -186,12 +189,15 @@ final class StreamsProviderImpl {
             case .streamInited:
                 self.isAlreadyLoadingCredentials = false
                 if let data = event.data?[0] as? [String: Any],
-                   let rtmpUrl = data["rtmpUrl"] as? String,
-                    let rtmpKey = data["rtmpKey"] as? String,
+                   let detail = data["detail"] as? [String: Any],
+                   let codec = detail[self.codec] as? [String: Any],
+                   let rtmpUrl = codec["rtmpUrl"] as? String,
+                    let rtmpKey = codec["rtmpKey"] as? String,
                    self.state.value.streamState == .preparing {
                     self.state.update(\.rtmpUrl, to: rtmpUrl)
                     self.state.update(\.rtmpKey, to: rtmpKey)
                     self.joinStream()
+            
                 }
             case .socketError:
                 if let data = event.data?[0] as? [String: Any], let errorCode = data["code"] as? Int {
@@ -326,8 +332,9 @@ extension StreamsProviderImpl: StreamsProvider {
     
     func setCampaign(_ campaign: Campaign, page: Page) {
         resolution = campaign.resolution ?? ""
-        print("Campaign MODE : \(campaign.aVCaptureVideoStabilizationMode )")
+        print("Campaign MODE : \(campaign.aVCaptureVideoStabilizationMode ), \(campaign.codec )")
         aVCaptureVideoStabilizationMode = campaign.aVCaptureVideoStabilizationMode
+        codec = campaign.codec
         state.update(\.campaign, to: campaign)
         overlayBaseUrl = campaign.hostOverlayURL
         updateOverlayUrl(isMirrored: true)
@@ -338,7 +345,7 @@ extension StreamsProviderImpl: StreamsProvider {
     }
     
     func configureStream() {
-        self.streamManager.captureDevices(isBackCamera: false, disableAdaptiveBitrate: userProperties.disableAdaptiveBitrate ?? false, resolution: self.resolution, aVCaptureVideoStabilizationMode: self.aVCaptureVideoStabilizationMode)
+        self.streamManager.captureDevices(isBackCamera: false, disableAdaptiveBitrate: userProperties.disableAdaptiveBitrate ?? false, resolution: self.resolution, aVCaptureVideoStabilizationMode: self.aVCaptureVideoStabilizationMode, codec: self.codec)
     }
     
     func joinStream() {

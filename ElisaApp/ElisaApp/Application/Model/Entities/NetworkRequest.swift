@@ -16,7 +16,7 @@ struct NetworkRequest {
     }
     
     let path: String
-    let method: HTTPMethod
+	let method: Alamofire.HTTPMethod
     let parameters: Parameters
     let files: [MultipartFormDataFile]
     let isAuthorizationRequired: Bool
@@ -25,7 +25,7 @@ struct NetworkRequest {
     // MARK: - Initializer
     
     init(path: String,
-         method: HTTPMethod,
+		 method: Alamofire.HTTPMethod,
          parameters: [String: Any?] = [:],
          files: [MultipartFormDataFile] = [],
          isAuthorizationRequired: Bool = true,

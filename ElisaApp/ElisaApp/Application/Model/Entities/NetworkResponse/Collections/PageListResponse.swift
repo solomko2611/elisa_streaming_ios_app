@@ -42,8 +42,9 @@ struct Campaign: Decodable, Hashable {
     let resolution: String?
     let streamProtocol:String?
     let aVCaptureVideoStabilizationMode: Int
+    let codec: String
     
     private enum CodingKeys : String, CodingKey {
-        case hostOverlayURL,id, name, startTime, resolution, streamProtocol = "protocol", aVCaptureVideoStabilizationMode
+        case hostOverlayURL,id, name, startTime, resolution, streamProtocol = "protocol", aVCaptureVideoStabilizationMode, codec
     }
 }
