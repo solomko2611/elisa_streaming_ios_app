@@ -1,0 +1,27 @@
+Autopush code to client repository:
+  tags: [elisa-deploy]
+  stage: auto_push
+  image: alpine
+  before_script:
+    - apk add --update coreutils
+    - apk add git
+  script:
+    - mkdir /source && cd /source
+    - git clone $GITLAB_PROJECT_URL project && cd project
+    - SOURCE="$PWD"
+    - git checkout $TARGET_BRANCH
+    - mkdir -p /client_code && cd /client_code
+    - git clone $CLIENT_GIT_URL project && cd project
+    - DEST="$PWD"
+    - cd $SOURCE
+    - git ls-files
+    - git ls-files | grep -v -e Videomeeting -e "prettierrc\ copy.js" | xargs -i sh -c 'mkdir -p "'"$DEST"'/$(dirname {})" && cp -r {} "'"$DEST"'/$(dirname {})"'
+    - cd "$DEST"
+    - git config user.email $CI_EMAIL
+    - git config user.name "$CI_USERNAME"
+    - git add --all
+    - git commit -m "Code update - ${DATE}"
+    - git push origin $CLIENT_TARGET_BRANCH || true
+  rules:
+    - if: '$CLIENT_PUSH_ACTIVE == "true"'
+      when: always
